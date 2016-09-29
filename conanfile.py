@@ -10,7 +10,7 @@ class IcuConan(ConanFile):
     url = "http://github.com/vitallium/conan-icu"
     settings = "os", "compiler", "build_type", "arch"
     options = {"shared": [True, False]}
-    default_options = "shared=False"
+    default_options = "shared=True"
     generators = "cmake"
 
     def source(self):
