@@ -1,15 +1,16 @@
 from conans import ConanFile, ConfigureEnvironment
 import os
-from conans.tools import download, unzip, replace_in_file, check_md5
+from conans.tools import download, unzip
 
 class IcuConan(ConanFile):
     name = "icu"
     version = "57.1"
     branch = "master"
+    license = 'http://www.unicode.org/copyright.html#License'
     url = "http://github.com/vitallium/conan-icu"
     settings = "os", "compiler", "build_type", "arch"
     options = {"shared": [True, False]}
-    default_options = "shared=True"
+    default_options = "shared=False"
     generators = "cmake"
 
     def source(self):
@@ -27,8 +28,10 @@ class IcuConan(ConanFile):
     def build(self):
         if self.settings.os == "Windows":
             self.build_windows()
+        elif self.settings.os == "Macos":
+            self.build_macos()
         else:
-            self.build_with_configure()
+            self.build_linux()
     
     def build_windows(self):
         sln_file = "%s\\icu\\source\\allinone\\allinone.sln" % self.conanfile_directory
@@ -45,27 +48,50 @@ class IcuConan(ConanFile):
         command_line = "/build \"Release|%s\" /project i18n" % arch
         self.run("devenv %s %s" % (sln_file, command_line))
 
-    def build_with_configure(self):
+    def build_linux(self):
         env = ConfigureEnvironment(self.deps_cpp_info, self.settings)
         self.run("chmod +x icu/source/runConfigureICU icu/source/configure icu/source/install-sh")
         self.run("%s icu/source/runConfigureICU Linux --prefix=%s --enable-shared=yes --enable-tests=no --enable-samples=no" % (env.command_line, self.package_folder))
         self.run("%s make" % env.command_line)
         self.run("%s make install" % env.command_line)
+        
+    def build_macos(self):
+        flags = '--prefix=%s --enable-tests=no --enable-samples=no' % self.package_folder
+        if self.options.shared == 'True':
+            flags += ' --disable-static --enable-shared'
+        else:
+            flags += ' --enable-static --disable-shared'
+      
+        if self.settings.build_type == 'Debug':
+            flags += ' --enable-debug --disable-release'
+
+        env = ConfigureEnvironment(self.deps_cpp_info, self.settings)
+        self.run("chmod +x icu/source/runConfigureICU icu/source/configure icu/source/install-sh")
+        self.run("%s icu/source/runConfigureICU MacOSX %s" % (env.command_line, flags))
+        self.run("%s make" % env.command_line)
+        self.run("%s make install" % env.command_line)
 
     def package(self):
-        if self.settings.os != "Windows":
-            return
-
         self.copy("*.h", "include", src="icu/include", keep_path=True)
-        if self.settings.arch == "x86_64":
-            build_suffix = "64"
+
+        if self.settings.os == "Windows":
+            if self.settings.arch == "x86_64":
+                build_suffix = "64"
+            else:
+                build_suffix = ""
+
+            if self.options.shared:
+                self.copy(pattern="*.dll", dst="bin", src=("icu/bin%s" % build_suffix), keep_path=False)
+
+            self.copy(pattern="*.lib", dst="lib", src=("icu/lib%s" % build_suffix), keep_path=False)
+            
         else:
-            build_suffix = ""
-
-        if self.options.shared:
-            self.copy(pattern="*.dll", dst="bin", src=("icu/bin%s" % build_suffix), keep_path=False)
-
-        self.copy(pattern="*.lib", dst="lib", src=("icu/lib%s" % build_suffix), keep_path=False)
+            self.copy( '*icu*.so', dst='lib', keep_path=False )
+            self.copy( '*icu*.a', dst='lib', keep_path=False )
+            self.copy( '*icu*.dylib', dst='lib', keep_path=False )
 
     def package_info(self):
-        self.cpp_info.libs = ["icuin", "icuuc", "icudt"]
+        if self.settings.os == "Windows":
+            self.cpp_info.libs = ["icuin", "icuuc", "icudt"]
+        else:
+            self.cpp_info.libs = ["icui18n", "icuuc", "icudata"]
