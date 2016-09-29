@@ -28,10 +28,8 @@ class IcuConan(ConanFile):
     def build(self):
         if self.settings.os == "Windows":
             self.build_windows()
-        elif self.settings.os == "Macos":
-            self.build_macos()
         else:
-            self.build_linux()
+            self.build_with_configure()
     
     def build_windows(self):
         sln_file = "%s\\icu\\source\\allinone\\allinone.sln" % self.conanfile_directory
@@ -47,15 +45,8 @@ class IcuConan(ConanFile):
         # and build
         command_line = "/build \"Release|%s\" /project i18n" % arch
         self.run("devenv %s %s" % (sln_file, command_line))
-
-    def build_linux(self):
-        env = ConfigureEnvironment(self.deps_cpp_info, self.settings)
-        self.run("chmod +x icu/source/runConfigureICU icu/source/configure icu/source/install-sh")
-        self.run("%s icu/source/runConfigureICU Linux --prefix=%s --enable-shared=yes --enable-tests=no --enable-samples=no" % (env.command_line, self.package_folder))
-        self.run("%s make" % env.command_line)
-        self.run("%s make install" % env.command_line)
         
-    def build_macos(self):
+    def build_with_configure(self):
         flags = '--prefix=%s --enable-tests=no --enable-samples=no' % self.package_folder
         if self.options.shared == 'True':
             flags += ' --disable-static --enable-shared'
@@ -64,10 +55,15 @@ class IcuConan(ConanFile):
       
         if self.settings.build_type == 'Debug':
             flags += ' --enable-debug --disable-release'
+            
+        if self.settings.os == 'Macos':
+            target_os = 'MacOSX'
+        else:
+            target_os = 'Linux'
 
         env = ConfigureEnvironment(self.deps_cpp_info, self.settings)
         self.run("chmod +x icu/source/runConfigureICU icu/source/configure icu/source/install-sh")
-        self.run("%s icu/source/runConfigureICU MacOSX %s" % (env.command_line, flags))
+        self.run("%s icu/source/runConfigureICU %s %s" % (env.command_line, target_os, flags))
         self.run("%s make" % env.command_line)
         self.run("%s make install" % env.command_line)
 
